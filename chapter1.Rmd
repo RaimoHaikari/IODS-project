@@ -1,4 +1,15 @@
+---
+title: "About the project"
+output:
+  html_document:
+    theme: cerulean
+    author: "Raimo Haikari"
+---
 
 # About the project
 
-*Write a short description about the course and add a link to your github repository here. This is an R markdown (.Rmd) file so you can use R markdown syntax. See the 'Useful links' page in the mooc area (chapter 1) for instructions.*
+<b>Introduction to Open Data Science 2018</b> is a cource that theaches you basics of Open Data, Open Science and Data Science. It is a open online cource, so you can attend "any time and any where" as long as you return your homeworks on time.
+
+Have fun!
+
+A link to my Github <a href="https://raimohaikari.github.io/IODS-project/" target="_blank">repository</a>
