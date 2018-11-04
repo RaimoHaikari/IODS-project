@@ -12,4 +12,4 @@ output:
 
 Have fun!
 
-A link to my Github <a href="https://raimohaikari.github.io/IODS-project/" target="_blank">repository</a>
+A link to my Github <a href="https://github.com/raimohaikari/IODS-project" target="_blank">repository</a>
