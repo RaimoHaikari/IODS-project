@@ -1,7 +1,246 @@
-# Insert chapter 2 title here
+---
+title: "Week2: Regression and model validation"
+output:
+  html_document:
+    theme: cerulean
+    author: "Raimo Haikari"
+---
 
-*Describe the work you have done this week and summarize your learning.*
+Load the packages:
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using  
+```{r,message=FALSE, warning=FALSE}
+library(dplyr)
+
+library(ggplot2)
+library(gridExtra)
+library(GGally)
+
+```
+
+# Regression and model validation
+
+## Part 1
+
+Data comes from survey where participants were asked questions to find out how different factors affect how well they perform in their statistics course.
+
+Load the data:
+
+```{r}
+rm(list = ls()) # Clear the memory
+
+url = "http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/learning2014.txt"
+lrn14 <- read.table(url, sep=",", header=TRUE)
+```
+
+Print general overview:
+
+```{r}
+str(lrn14)
+```
+
+There are:
+
+- 166 observations of 7 variables
+- one factor variable: Gender
+- two discrete varibles: age and points
+- four continous variables: attitude, deep, stra and suft
+
+Deep, surf and stra are combination variables, that summarise questions related to deep, surface and strategic learning.
+
+## Part 2
+
+### Graphical overview 
+
+I will use ggpairs -function to show graphical overview of the data. I will comment graph later when i go through variables.
+
+```{r}
+p <- ggpairs(lrn14, 
+             mapping = aes(col = gender), 
+             lower = list(combo = wrap("facethist", bins = 20)))
+
+p
+```
+
+### Summaries of the data
+
+##### Gender
+
+- There are 110 females and 56 males. 
+- Judging by the graphical overview men seem to be little older and have better attitude towards statistics.
+- Female students have better points in questions related to strategic learning
+- Female and male students have about same median points
+
+```{r}
+summary(lrn14$gender)
+```
+
+##### Age
+
+- Distibution of age is right skewed in both groups  (male, female).
+- Majority of participants are about 20 years old
+- Male age has slight negative correlation with points
+
+```{r}
+summary(lrn14$age)
+```
+
+##### Attitude
+
+Lets take closer look of attitude distribution.
+
+```{r}
+ggplot(lrn14, aes(attitude)) + geom_density(aes(fill=factor(gender)), alpha=0.7)
+```
+
+
+- female students attitude distribution is near normal. 
+- male students attitude is little bit left skewed, that is majority of male students have higher points in attitude related questions.
+- main thing about the general overview plot is that both sex have moderate correlation between attitude and  points 
+- males have also moderate correlation between attitude and surface learning
+
+
+```{r}
+summary(lrn14$attitude)
+```
+
+##### Deep
+
+- Distribution is left skewed. (Majority of students got more points than arithmetical mean value 2.5)
+
+```{r}
+summary(lrn14$deep)
+```
+
+##### Stra
+
+- Distribution of points related to strategic learning is near normal.
+- Female studens tend to have little bit better points
+
+```{r}
+summary(lrn14$stra)
+```
+
+##### Surf
+
+Lets take a closer look of distribution of surface related questions:
+
+```{r}
+ggplot(lrn14, aes(surf)) + geom_density(aes(fill=factor(gender)), alpha=0.7)
+```
+
+
+- female students distribution is near normal
+- male studens range is wider and their distribution is little bit right skewed.
+- female sudents got higher points in this category
+
+
+```{r}
+summary(lrn14$surf)
+```
+
+##### Points
+
+Distribution is left skewed, which means that students in general got good grades (better than aritmetical distribution.)
+
+```{r}
+summary(lrn14$points)
+```
+
+## Part 3
+
+Before i'll fit my model. I will try to explain what is shown in the summary.
+
+1) First there is the summary of residuals. Residuals are the difference of true values and values predicted by the model. 
+
+2) In Coefficients section there list of variables (used in model) and how they affect to the model. Each attribute has a p-value, which is a statistical assesment of validity. We are using sample to estimate population behaviour. Null hypothesis is that variable doesn't have effect to the model in population level and coefficient should be zero. When we fit the regression line, we get some value for each variable. Variables p-Value tell us what is the probability to have that value even though value should be zero. Small p-value means that result wasn't coincidence and that parameter is valid.
+
+3) Finally there are figures that describe model and estimate its trustworthiness. 
+
+No we are ready to build our model.
+
+Judging by the correlations displayed in general overview plot none of the attributes has strong correlation with points. 
+
+Attitude has highest correlation, about 0.47. So i'll choose that. And i'll also choose age and gender in my linear model. I'll use the common strategy that each variable should have p-value less than 0.05.
+
+```{r}
+model_one <- lm(points ~ attitude + surf + stra, data = lrn14)
+
+summary(model_one)
+```
+
+In my first model there are two coefficients that don't meet my p-value criteria. I'll drop surf-values of my model and try again:
+
+```{r}
+model_two <- lm(points ~ attitude  + stra, data = lrn14)
+
+summary(model_two)
+```
+
+Stra doesn't meet the p-value criteria so i drop if off.
+
+```{r}
+model_three <- lm(points ~ attitude, data = lrn14)
+
+summary(model_three)
+```
+
+Now "all" coffeficients are statistically valid. 
+
+## Part 4
+
+##### Summary
+
+My final model has two coefficients: intercept and attitude.
+
+intercept
+
+- value is about 11.6. It tells the point where regression line intercpets y-axis.
+- student whose attitude is 0 is expect to have 11.6 points
+
+attitude
+
+- value is about 3.5, which means that one point rise in attitude means 3.5 higher points.
+
+##### Multiple R-squared 
+
+Multiple R-squared  is a value that gives overall assesment how well model is doing. It tells the porpotion of variance explained by the model. Near one values are preferable.
+
+## Part 5
+
+Diagnostic plots are used to test that assuptions of linear regression are met.
+
+##### Residuals vs. Fitted
+
+Residuals vs. Fitted plot is used to assure that phenomenon we are trying to model is linear. 
+
+Residuals should be equally spread around the x-axis of the plot and there shouldn't be any noticeable patterns.
+
+My model doesn't capture the true essense of phenomenon because, plot identifies three outlier valus, that is rows 145, 56 and 35.
+
+
+```{r}
+plot(model_three, which = 1)
+```
+
+
+##### Normal QQ-plot
+
+Residuals shoud be normally distributed. QQ-Plot is used to test that assumption. Residuals should line well with the diagonal axis. 
+
+In my model there are problems in both ends of theoretical line. Which means that the model doesn't explain phenomeon "totally"", three are some "too big residuals"
+
+```{r}
+plot(model_three, which = 2)
+```
+
+##### Residuals vs Leverage
+
+This plot helps us to see if there are observations that distort our model. 
+Those observations are outliers that don't fit with the trend of the data. If there are such observations, removing those will improve models accuracy.
+
+And once again there are few obsevations that distort my model. 
+
+```{r}
+plot(model_three, which = 5)
+```
+
