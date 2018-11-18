@@ -53,7 +53,7 @@ Deep, surf and stra are combination variables, that summarise questions related 
 
 I will use ggpairs -function to show graphical overview of the data. I will comment graph later when i go through variables.
 
-```{r}
+```{r out.width = '100%'}
 p <- ggpairs(lrn14, 
              mapping = aes(col = gender), 
              lower = list(combo = wrap("facethist", bins = 20)))

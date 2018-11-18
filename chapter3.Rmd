@@ -1,0 +1,358 @@
+---
+title: "Week3: Logistic regression"
+output:
+  html_document:
+    theme: cerulean
+    author: "Raimo Haikari"
+---
+
+Load the packages:
+
+```{r,message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+
+library(ggplot2)
+library(GGally)
+
+library(caret)
+```
+
+# Logistic regression
+
+##### Overview of the data
+
+Original data has information on student performances in two Portuguese schools. The data attributes include information how students are doing in school and their backgrounds. There are two datasets, one focuses on Mathematics studies (mat) and other Portuguese language (por) studies.
+
+In data wrangling part of this weeks assignment datafiles were combined so that combination data has information on those students who were present in both of the disctinct datasets (por and mat). 
+
+Analysis part of this weeks assignment focuses on building a model that predicts probability of students high alcohol use. So two additional columns were added:
+
+- one that calculates mean of student weekly and weekend alcohol use
+- one that classifies students average alcohol use either high or low based on average consumption.
+
+<a href="https://archive.ics.uci.edu/ml/datasets/Student+Performance">Link</a> to the original data.
+
+Load the data:
+
+```{r}
+rm(list = ls()) # Clear the memory
+
+url = "http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/alc.txt"
+
+alc <- read.table(url, sep=",", header=TRUE)
+```
+
+##### Data in nutshell
+
+```{r, results=FALSE}
+dim(alc)
+
+# How many factor variables
+print(paste("There are ", sum(sapply(alc, is.factor)), " factor variables", sep=""))
+
+# How many numeric variables
+print(paste("There are ", sum(sapply(alc, is.numeric)), " numeric variables", sep=""))
+
+# How many logical variables
+print(paste("There are ", sum(sapply(alc, is.logical)), " logical variables", sep=""))
+```
+
+There are:
+
+- 382 observations of 35 variables
+
+- 17 factor variables
+- 17 numeric variables
+- 1 logical variable
+
+##### Select the variables
+
+Our task is to choose 4 variables and study their relationship between high/low alcohol consumption.
+
+One thing to concider when choosing explanatory variables is that there has to be variance in variable values. If majority of observations have same value, variable has limited prediction power.
+
+So I will print a graph that can be use as an aid to check the distribution of variables.
+
+```{r, message=FALSE, warning=FALSE, out.width = '100%', fig.height = 10}
+gather(alc) %>% 
+  ggplot(aes(value)) + 
+  geom_bar() +
+  facet_wrap("key", scales = "free")
+```
+
+Based on data description, distribution plot, intuition and prejudice I choose following 4 variables:
+
+<ul>
+  <li>sex: student's sex (binary: 'F' - female or 'M' - male) </li>
+  <li>absences: number of school absences (numeric: from 0 to 93)</li>
+  <li>romantic:  with a romantic relationship (binary: yes or no)</li>
+  <li>goout: going out with friends (numeric: from 1 - very low to 5 - very high)</li>
+</ul>
+ 
+My hypothesis is that:
+
+- Male students drink more than female students
+- Students who drink have more absences
+- If student has a boy or girlfriend she/he won't be as tempted to go drinking
+- Students that spend more time with their friend propably attend parties more often.
+
+And by combing these risk factors we are able to identify abusers and contact local authorities!
+
+##### Overview of chosen variables
+
+Summaries of the chosen variables.
+
+##### sex
+
+- It is a factor variable
+- number of males and females is almost equal
+- according to the  probability table & bar graph male students drink more
+
+```{r}
+summary(alc$sex)
+
+prop.table(
+  table(alc$sex, alc$high_use), margin = 1
+)
+
+ggplot(alc, aes(sex)) +
+  geom_bar(aes(fill = high_use), stat="count", position=position_dodge())
+```
+
+##### absences
+
+- It is a numerical variable
+- It has a right skewed distribution, majority of students have zero of only a couple absences
+- because there are lot's of distinct values, and in higher end values become sparse, it's difficult to form an opinion of variables prediction power
+- but according to the distribution plot it seems that students who have lot of absences more likely belong to the high use group
+
+```{r}
+summary(alc$absences)
+
+sort(unique(alc$absences))
+
+ggplot(alc, aes(absences)) +
+  geom_density(aes(fill=factor(high_use)), alpha=0.7)
+
+# table(alc$absences, alc$high_use)
+# prop.table(table(alc$absences, alc$high_use), margin = 1)
+```
+
+##### romantic
+
+- factor variable
+- amount of singles is about two times higher than students who are dating
+- judging by the probability table & bar chart, romantic relationship doesn't seem to affect the probabitity of high alcohol use
+
+```{r}
+summary(alc$romantic)
+
+prop.table(
+  table(alc$romantic, alc$high_use), margin = 1
+)
+
+ggplot(alc, aes(romantic)) +
+  geom_bar(aes(fill = high_use), stat="count", position=position_dodge())
+
+```
+
+##### goout
+
+- numeric variable
+- has distinct values: 1,2,3,4,5
+- students who go out 4 or 5 times a week seem to have a risk of high alcohol use
+
+```{r}
+summary(alc$goout)
+unique(alc$goout)
+
+prop.table(
+  table(alc$goout,alc$high_use), margin = 1
+)
+
+ggplot(alc, aes(goout)) +
+  geom_bar(aes(fill = high_use), stat="count", position=position_dodge())
+```
+
+##### High use
+
+- Majority of students don't belong to the high use groub.
+- If we predict that no one is using too much alcohol, our success rate is about 0.71 %. That rate is called __no information rate__. More about that later....
+
+
+```{r}
+(hu = table(alc$high_use))
+(hu[1] / sum(hu))
+```
+
+
+##### Conclusion
+
+Based on variable exploration it seems that:
+
+- two variables are useful (sex and goout)
+- one variable might have some use (absenses)
+- one variable has no prediction power (romantic).
+
+So my selection doesn't look as good as i hope it would, but let's see what happens.
+
+### Logistic regression model
+
+Let's fit logistic regression model with chosen values:
+
+```{r}
+m <- glm(high_use ~ sex + absences + romantic + goout, data = alc, family = "binomial")
+```
+
+##### Summary of the model
+
+In the first line you can see the formula.
+
+After that there is a summary of the residuals: range, first and third quantiles and median. It would be good if values lie near zero. My model seems to have some kind of problems, because median is below zero and positive values have larger spread than negative values have.
+
+Then there is a list of coefficients. When model is calculating estimation, coefficients are used in a following way:
+
+1) Intercept coeffient (-4.18334) is taken as an starting point 
+
+2) sexM
+- if student is male 0.98673 is added to the sum
+- if student is female, sum remains the same
+
+3) absences
+- each absense adds 0.06805 to the sum
+
+4) romanticyes
+- if student is in a romantic relationship 0.25962  is subtracted from the sum
+- otherwise sum remais the same
+
+5) goout
+- each "goout" adds 0.74848 to the sum
+
+Result of sum is the logarithm of division probability of high use vs probability of low use; in other words log of the odds. And when you know log of odds, you can calculate the probality of positive event, which in this case is high alcohol use:
+
+- if e.g log of the odds is: -0.7811263
+- R's exp -function returns: 0.45789, which is the odds ratio
+- by solving equation: p / 1 - p = 0.45789 you get the probability of the event, which is 0.3140772.
+
+With each coefficient there is also p-value, which tells the probability whether that coefficient is statistically valid. Typically p-value has to be less than 0.05. Three out of my four variables have p-value less than 0.05. Romanticyes doesn't meet that criteria, so i should rule it out and retrain the model.
+
+```{r}
+summary(m)
+```
+
+##### coefficients of the model:
+
+Lets review the coefficients. Each coefficient by itself is also logarithm of the odds ratio. which tells: "If it is up to that variable, how much does the probability of event change". If variables odds ratio is above 1 that variable increases the total probabilitys of event. There are three such variables in my model: sexM, absences and goout.
+
+An analogy is that variables are switches. Starting point is that all the switches are off. Value of intercept tells the log of the odds between "high use" and "low use" in that situation. In my model value of (Intercept) is 0.01524751, which means that there is a low probability that random student is a high user.
+
+sexM has an odds ratio of 2.68245830, which means male students have about 2.7 higher risk of being high user when compared to the female students.
+
+In absences each absence increases 1.07 times the risk of being high user.
+
+In goout one step increase in value increases 2.1 times the risk of being high user.
+
+```{r}
+coef(m)
+
+# compute odds ratios (OR)
+OR <- coef(m) %>% exp
+
+# compute confidence intervals (CI)
+CI <- exp(confint(m))
+
+# print out the odds ratios with their confidence intervals
+cbind(OR, CI)
+```
+
+##### Prediction
+
+Let's see how my model is doing. I use it to predict training set values and the compare results with actual values. 
+
+But for starters i will retrain my model without romantic variable, so that all the predictors will be statistically significant. Then i analyse results with caret -packages confusionMatrix -function, which will print detailed overview of results.
+
+This time most interesting parts of report are:
+
+- Accuracy, which is the percentage of correct predictions
+- No Information Rate, which is the percentage of dominant class. I you just predict that all instances belong that class, you would get that success rate.
+
+Jugding by report, my model had some success, at least it was able to beat the no information rate.
+
+
+```{r}
+# retrain the model
+m <- glm(high_use ~ sex + absences + goout, data = alc, family = "binomial")
+# summary(m)
+
+# setup new data frame, which has both actual values and predicion
+df <- alc %>%
+  mutate(predProbs = predict(m, type = "response")) %>%
+  mutate(pred = ifelse(predProbs > 0.5, TRUE, FALSE)) %>%
+  select(high_use, pred, predProbs)
+
+# 2x2 cross tabulation of predictions versus actual values
+xtab <- table(df$pred, df$high_use)
+
+# summary of results
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+##### 10-fold cross-validation 
+
+I will retrain my model, but this time i will use caret-packages cross-validation. 
+
+I will proceed with different strategy which was used in DataCamp. I use cross-validation in training phase. 
+
+General idea is that dataset is divided into 10 subgroups. Training process is a loop that runs 10 times, each time 9 groubs are used for training and one is left out. So each group will be left out once. Final model is combination of those 10 submodels. 
+
+Advantage of this strategy is that in this way we get more general view of the phenomenon compared to situation where whole training set is used at once. Prediction accuracy for training set might decreace but, if we would have to use on model to totally new dataset, cross-validated model should be more accurate than "original model", because that model is fine tuned for the training set.
+
+```{r}
+# backup of the original data
+alc_backup <- alc
+
+# encode factor variables to binary varibles
+dummies_model <- dummyVars(~.,  data = alc)
+alc  <- data.frame(predict(dummies_model, newdata = alc))
+
+# select the variables used in training
+alc <- alc[,c("sex.M","absences","goout")]
+alc$high_use <- alc_backup$high_use
+alc$high_use <- as.factor(alc$high_use)
+
+# create cross-validation sets
+set.seed(8520)
+indx <- createFolds(alc$high_use, returnTrain = TRUE)
+
+# setup traincontrol -object
+ctrl <- trainControl(method = "cv", 
+                     index = indx,
+                     savePredictions = TRUE)
+
+# train model using cross-validation
+cvModel <- train(x = alc[,c("sex.M","absences","goout")], 
+                 y = alc$high_use, 
+                 method = "glm",
+                 trControl = ctrl)
+
+```
+
+Let see what happens we use our cross-validated model for prediction.
+
+```{r}
+# Predict 
+cvModelPred <- predict(cvModel, type = "prob")
+colnames(cvModelPred) <- c('No','Yes')
+
+
+df <- df %>% 
+  mutate(cvPredProbs = cvModelPred$Yes) %>%
+  mutate(cvPred = ifelse(cvPredProbs > 0.5, TRUE, FALSE)) %>%
+  select(high_use, pred, predProbs, cvPred, cvPredProbs)
+
+sum(df$pred != df$cvPred) # 0 - models have same predictions
+sum(df$predProbs != df$cvPredProbs)
+```
+
+Hmm... results seem to be exactly same. Even the probabilities match. As I stated earlier, i was expecting that cross-validated model would do worse in predicting training set. 
