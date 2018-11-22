@@ -1,0 +1,587 @@
+---
+title: "Week4: Clustering and classification"
+output:
+  html_document:
+    theme: cerulean
+    author: "Raimo Haikari"
+---
+
+# Clustering and classification
+
+## Part I
+
+Load the packages:
+
+```{r,message=FALSE, warning=FALSE}
+library(MASS)
+library(dplyr)
+library(ggplot2)
+
+library(caret)
+library(Rtsne)
+```
+
+Read the data:
+
+```{r}
+data("Boston")
+```
+
+Dataset is quite old, 1978?
+
+Data has:
+
+- 14 numeric variables
+- 2 of variables are discrete [chas and rad]
+- 12 of variables are continous
+- 506 observations
+
+
+```{r}
+dim(Boston)
+str(Boston)
+
+sum(sapply(Boston, function(x){is.double(x)})) # number of continous  variables
+sum(sapply(Boston, function(x){!is.double(x)})) # number of discrete variables
+```
+
+## Part II
+
+Let's see what is our data made of.
+Let's go through the variables
+
+##### crim
+
+- per capita crime rate by town
+- right skewed distribution
+- 70 % of observations are below 2 
+- last 10% have values that really stand out of the overall distribution
+
+```{r}
+summary(Boston$crim)
+
+quantile(Boston$crim, probs = seq(0, 1, 0.1))
+
+ggplot(Boston, aes(crim)) +
+  geom_histogram(binwidth=1,fill="white",colour="black")
+
+```
+
+##### zn
+
+- proportion of residential land zoned for lots over 25,000 sq.ft. 
+- lots over 25,000 seem to be quite rare because 74 % of areas don't have those
+
+```{r}
+summary(Boston$zn)
+
+nrow(Boston[which(Boston$zn == 0),])/nrow(Boston)
+
+ggplot(Boston, aes(zn)) +
+  geom_histogram(binwidth=1,fill="white",colour="black")
+```
+
+##### indus
+
+- proportion of non-retail business acres per town. 
+- histogram seems little bit polarised. Maby the right tail of histogram represents manufacturing areas?
+
+```{r}
+summary(Boston$indus)
+
+quantile(Boston$indus, probs = seq(0, 1, 0.1))
+
+ggplot(Boston, aes(indus)) +
+  geom_histogram(binwidth=1,fill="white",colour="black")
+```
+
+
+##### chas
+
+- Charles River dummy variable (= 1 if tract bounds river; 0 otherwise). 
+- binary variable
+- 94 % of areas don't bound river
+
+```{r}
+summary(Boston$chas)
+
+prop.table(table(Boston$chas))
+
+Boston %>%
+  mutate(bounds = ifelse(chas,'Yes','No')) %>%
+  ggplot(., aes(bounds)) +
+  geom_bar(fill="white",colour="black")
+  # geom_histogram(binwidth=1,fill="white",colour="black")
+```
+
+##### nox
+
+- nitrogen oxides concentration (parts per 10 million)
+- right skewed distribution with "bumps"
+
+```{r}
+summary(Boston$nox)
+
+ggplot(Boston, aes(x=nox)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=.025,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+##### rm
+
+- average number of rooms per dwelling
+- distribution is near normal
+
+```{r}
+summary(Boston$rm)
+
+ggplot(Boston, aes(x=rm)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=.25,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+##### age
+
+- proportion of owner-occupied units built prior to 1940. 
+- left skewed distribution which might due that dataset is quite old
+
+```{r}
+summary(Boston$age)
+
+ggplot(Boston, aes(x=age)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=1,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="Proportion of owner-occupied units built prior to 1940",
+        x = "Proportion %", 
+        y = "Density")
+```
+
+
+##### dis
+
+- weighted mean of distances to five Boston employment centres. 
+- right skewed distribution that is most of areas are near employment centre
+
+```{r}
+summary(Boston$dis)
+
+ggplot(Boston, aes(x=dis)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=0.5,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="weighted mean of distances to five Boston employment centres",
+        x = "Distance", 
+        y = "Density")
+```
+
+##### rad
+
+- index of accessibility to radial highways
+- discrete
+- polarised
+
+```{r}
+summary(Boston$rad)
+
+ggplot(Boston, aes(x=rad)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=1,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="index of accessibility to radial highways",
+        x = "Index", 
+        y = "Density")
+```
+
+
+##### tax
+
+- full-value property-tax rate per \$10,000.
+- polarised
+
+```{r}
+summary(Boston$tax)
+
+ggplot(Boston, aes(x=tax)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=25,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="full-value property-tax rate per $10,000",
+        x = "property-tax rate", 
+        y = "Density")
+
+```
+
+##### ptratio
+
+- pupil-teacher ratio by town. 
+- left skewed distribution
+- mode value is 20 students per teacher
+
+```{r}
+summary(Boston$ptratio)
+
+ggplot(Boston, aes(x=ptratio)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=0.5,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="Pupil-teacher ratio by town",
+        x = "pupils per teacher", 
+        y = "Density")
+```
+
+##### black
+
+- 1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town
+- left skewed distribution
+- over 80 % of observations have value greater than 364
+
+```{r}
+summary(Boston$black)
+
+quantile(Boston$black, probs = seq(0, 1, 0.1))
+
+ggplot(Boston, aes(x=black)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=10,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town",
+        x = "proportion of blacks by town", 
+        y = "Density")
+
+```
+
+
+##### lstat
+
+- lower status of the population (percent). 
+- right skewed distribution
+- there are some poor regions?
+
+```{r}
+summary(Boston$lstat)
+
+quantile(Boston$lstat, probs = seq(0, 1, 0.1))
+
+ggplot(Boston, aes(x=lstat)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=1,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="lower status of the population (percent)",
+        x = "percentage", 
+        y = "Density")
+```
+
+##### medv
+
+- median value of owner-occupied homes in $1000s. 
+- there are some 20 high value areas that stand out
+- otherwise distribution is near normal
+
+```{r}
+summary(Boston$medv)
+
+quantile(Boston$medv, probs = seq(0, 1, 0.1))
+
+tail(sort(Boston$medv),n=20)
+
+ggplot(Boston, aes(x=medv)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=1,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") +
+    labs(title="median value of owner-occupied homes in $1000s",
+        x = "$1000s", 
+        y = "Density")
+```
+
+##### Correlations
+
+###  Part III
+
+Next I will replace the original dataset with standardized dataset. 
+
+After standardization each variable has zero mean and unit variance. 
+
+Standardization is common workprocedure in data mining. One main reason for this is that some procedures like dimension reduction give more accurate results when all the variables have same scale. 
+
+- LDA which we are going to use later on in this exercise has assumption varibles have same variance
+
+There is:
+- nox which had range 0.385 to 0.8710
+- zn which had range 0 to 100
+
+After standardization:
+- nox has range -1.4644 to 2.7296
+- zn has range from -0.48724 to 3.8004
+
+
+```{r}
+Boston <- as.data.frame(
+  scale(Boston)
+)
+
+summary(Boston)
+# sd(Boston$zn)
+```
+
+Then i will create new category variable based on crimerate values.
+- Values are cut four bins based on the quantiles
+- Finally i will replace original continous variable with created category variable
+
+```{r}
+breaks <- quantile(Boston$crim, probs = seq(0,1,0.25))
+
+crime <- cut(Boston$crim, 
+             breaks = breaks, 
+             labels = c("low","med_low","med_high","high"),
+             include.lowest = TRUE)
+
+# replace continous variable with category variable
+Boston$crim <- crime
+
+```
+
+Finally i will divide dataset to train and test sets. 
+- Split will be 80/20. 
+- 80 % of observations go to the trainset
+- Split is done by means on random sampling
+
+```{r}
+# set seed for Reproductivit
+set.seed(8520)
+
+# choose randomly 80% of the rows
+ind <- sample(nrow(Boston),  size = nrow(Boston) * 0.8)
+
+# create train set
+train <- Boston[ind,]
+
+# create test set 
+test <- Boston[-ind,]
+```
+
+### Part IV
+
+It's time to fit a LDA model. Then i'll print the summary of the model.
+
+One thing that chatches eye is the porpotion of trace: first linear discriminant explains 0.95 of the total variance. 
+
+```{r}
+lda.fit <- lda(crim ~ ., data = train)
+```
+
+Then i will draw the LDA (bi)plot. I'll skip the arrows, because i think that they distract more than explain
+
+- polarised: high values define distinct groub
+- which probaply explains the high percentage of LD1
+- division between: low,med_low,med_high depend more on LD2 and LD3 and there aren't clear class boundaries. Maby set doesn't have enough info or LDA or maby task is beyond capablities of linear model..
+
+```{r}
+# target classes as numeric
+classes <- as.numeric(train$crim)
+
+# plot the lda results
+plot(lda.fit,
+     col = classes,
+     pch = classes,
+     dimen = 2)
+```
+
+## Part V
+
+Let's see how my model manages with unseen data. 
+
+First I will save the crime categories from the test set and then remove the categorical crime variable from the test dataset.
+
+Then I will predict with the LDA model on the test data.
+
+```{r}
+# save crime categories from the test set
+categories <- test$crim
+# remove variable from test set
+test$crim <- NULL
+# predict the classes with the LDA model on the test data
+pred <- predict(lda.fit, newdata = test)
+
+df = data.frame(obs = categories,
+                pred = pred$class)
+
+```
+
+Finally I will analyse results with caret -packages confusionMatrix -function, which will print detailed overview of results.
+
+- Model accuracy is way higher than No Information rate. No information rate is so slow because there isn't any dominant class in test set.
+- In the (bi)Plot of the model we noticed that groub High is clearly separated of the rest of classess. That separation can also be seen in the prediction results: sensitivity High is were high.
+- And model has difficulities with low, med_low and med_hihg classess, which didn't have disctinct borders in the (bi)plot either.
+
+```{r}
+# for starters let's print the distibution of true values
+table(categories)
+
+df = data.frame(obs = categories,
+                pred = pred$class)
+
+xtab <- table(df$pred, df$obs)
+
+# summary of results
+print(confusionMatrix(xtab))
+```
+
+## Part VI
+
+- Reload the Boston dataset and standardize the dataset
+Calculate the distances between the observations.
+Run k-means algorithm on the dataset. 
+
+Investigate what is the optimal number of clusters
+
+and run the algorithm again. 
+
+Visualize the clusters (for example with the pairs() or ggpairs() functions, where the clusters are separated with colors) and interpret the results. (0-4 points)
+
+
+```{r}
+# clear memory und reload data
+rm(list=ls())
+data("Boston")
+
+# backup copy of original data
+bak <- Boston
+
+# standardize the dataset"
+Boston <- as.data.frame(scale(Boston))
+```
+
+##### Distance of observations
+
+Let's calculate the distance matrix of observations
+
+```{r}
+# calculate the euclidean distance of observations
+dist_Boston = as.matrix(dist(Boston, 
+                             method = "euclidean"))
+```
+
+As a sanity check lets print:
+
+- the most similar observations
+- observations that have least common
+
+And according prints distance matrix seems to be ok.
+
+```{r}
+copy_of_dist <- dist_Boston
+
+# clear diagonal axis and lower triangle, so that:
+# - we have unique distances
+# - don't have observations distance with itself, which is always 0
+diag(copy_of_dist) <- NA
+dist_Boston[lower.tri(copy_of_dist)] <- NA
+
+
+# - most similar pair
+bak[which(copy_of_dist==min(copy_of_dist, na.rm = TRUE), arr.ind = TRUE)[1, ], ]
+
+# - most dissimilar pair
+bak[which(copy_of_dist==max(copy_of_dist, na.rm = TRUE), arr.ind = TRUE)[1, ], ]
+
+rm(copy_of_dist)
+```
+
+##### K-Means clustering
+
+First i will select the optimal number of clusters.
+
+I'll use so called <a href="https://www.r-bloggers.com/finding-optimal-number-of-clusters/">elbow method</a> where one:
+
+- tries different cluster counts and records each time variance explained as a function of the number of clusters
+- plots findings
+- looks where the gain starts to slow down
+
+So instead of seeking smallest value we are interested in where the trend chances.
+
+Based on the plot, two seems to be optimal number of clusters.
+
+```{r}
+set.seed(123)
+k_max <- 10
+
+# calculate the total within sum of squares
+twcss <- sapply(1:k_max, function(k){kmeans(Boston, k)$tot.withinss})
+
+df <- data.frame(val = twcss,
+                 n = 1:length(twcss))
+
+ggplot(df, aes(y = val, x = factor(n), group = 1)) + 
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of clusters", 
+       y = "Total within sum of squares")
+  
+
+
+```
+
+No that the number of clusters is fixed. I'll run the clustering once again.
+
+Visualize the clusters (for example with the pairs() or ggpairs() functions, where the clusters are separated with colors) and interpret the results.
+
+```{r}
+Boston$clust <- kmeans(Boston, 2)$cluster
+```
+
+```{r}
+breaks <- quantile(Boston$crim, probs = seq(0,1,0.25))
+
+crime <- cut(Boston$crim, 
+             breaks = breaks, 
+             labels = c("low","med_low","med_high","high"),
+             include.lowest = TRUE)
+
+# replace continous variable with category variable
+Boston$crim <- crime
+```
+
+
+
+VIZ
+
+```{r}
+sne_obj <- Rtsne(dist_Boston, is_distance = TRUE)
+
+tsne_data <- sne_obj$Y %>%
+  data.frame() %>%
+  setNames(c("X", "Y")) %>%
+  mutate(cluster = Boston$clust) %>%
+  mutate(crime = Boston$crim)
+
+
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = cluster, size=crime))
+
+library(ggalt)
+
+midwest_select <- tsne_data[tsne_data$cluster == 2,]
+
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = crime)) +
+  geom_encircle(aes(x = X, y = Y), 
+                data = midwest_select,
+                color="red", 
+                size=1, 
+                expand=0.02)
+
+```
+
