@@ -796,3 +796,60 @@ And then there are variables like age, where G2 has even distribution and age is
 
 Variable dis has opposite behaviour when inspected from clustering viewpoint.
 
+## Bonus I
+
+I'll reload and standardize data. Then I perform  k-means clustering with k value 8. I choose that value because after that the "gain" flattens.
+
+```{r}
+# clear memory und reload data
+rm(list=ls())
+data("Boston")
+
+# standardize the dataset"
+Boston <- as.data.frame(scale(Boston))
+
+# clustering 
+set.seed(8520)
+Boston$clust <- as.factor(kmeans(Boston, 8)$cluster)
+
+# table(Boston$clust)
+
+```
+
+Then I'll perform the LDA analysis.
+
+Based on the summary, there are two main discriminants that explain most of the clustering results.
+
+```{r}
+lda.fit <- lda(clust ~ ., data = Boston)
+
+lda.fit
+```
+
+Time to visualize the results with a biplot.
+
+- There are 2 main groups
+- variables rad, tax, zn and age are most influential variables 
+- groups are quite distict, at least 1,2,4 and 5 form clear areas
+
+
+```{r out.width = '100%'}
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+# target classes as numeric
+classes <- as.numeric(Boston$clust)
+
+# plot the lda results
+plot(lda.fit,
+     col = classes,
+     pch = classes,
+     dimen = 2)
+lda.arrows(lda.fit, myscale = 2)
+```
+
