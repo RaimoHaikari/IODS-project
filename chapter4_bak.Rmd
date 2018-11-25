@@ -10,64 +10,6 @@ output:
 
 ## Part I
 
-##### Custom funtions
-
-__cor.test__ calculates correlation p-values
-
-Parameters are:
-- mar: dataset 
-
-__positiveCorrelation__ and  __negativeCorrelation__ select one variable and then seek if any of other variables have high positive or negative correlation with selected variable. 
-
-Parameters are:
-- M: precalculated correlation matrix
-- varname: selected variable
-- cLimit: limit of high correlation 
-
-```{r}
-rm(list=ls()) # Clear memory
-
-cor.mtest <- function(mat, ...) {
-    mat <- as.matrix(mat)
-    n <- ncol(mat)
-    p.mat<- matrix(NA, n, n)
-    diag(p.mat) <- 0
-    for (i in 1:(n - 1)) {
-        for (j in (i + 1):n) {
-            tmp <- cor.test(mat[, i], mat[, j], ...)
-            p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
-        }
-    }
-  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
-  p.mat
-}
-
-
-negativeCorrelation <- function(M, varname, cLimit = 0.6){
-  names(
-    which(
-      apply(
-        as.matrix(sort(M[!rownames(M) %in% varname,varname], decreasing = TRUE)), 
-        1, 
-        function(x) x < -1 * cLimit
-        )
-      )
-  ) 
-}
-
-positiveCorrelation <- function(M, varname, cLimit = 0.6){
-  names(
-    which(
-      apply(
-        as.matrix(sort(M[!rownames(M) %in% varname,varname], decreasing = TRUE)), 
-        1, 
-        function(x) x > cLimit
-        )
-      )
-  ) 
-}
-```
-
 Load the packages:
 
 ```{r,message=FALSE, warning=FALSE}
@@ -76,24 +18,23 @@ library(dplyr)
 library(ggplot2)
 
 library(caret)
-# library(Rtsne)
-library(ggalt)
-library(GGally)
+library(Rtsne)
 
 library(corrplot)
 ```
 
-This weeks exercise uses Boston dataset which is a part of MASS -package. Dataset contains information of Housing Values in Suburbs of Boston. It's well known dataset which had been used a lot in different machine learning purposes, escpecially in testing regression models.
+This weeks exercise uses Boston dataset which is part of MASS -package. Dataset contains information of Housing Values in Suburbs of Boston.  It's well known dataset which had been used a lot in different machine learning purposes, escpecially in testing regression models.
 
-Because Dataset is a part of R package, you can find more information about it by typing __?Boston__ in R command line.
+Because Dataset is a part of R package, you can find more information about it by typing <em>?Boston</em>, in R command line.
+
 
 Read the data:
 
 ```{r}
 data("Boston")
-
-options(scipen=999) # disable scientific notation
 ```
+
+Dataset is quite old 1978. 
 
 Data has:
 
@@ -113,46 +54,15 @@ sum(sapply(Boston, function(x){!is.double(x)})) # number of discrete variables
 
 ## Part II
 
-Let's see what our data is made of. I will go through the variables one by one. But first i will calculate correlation matrix and present correlogram. 
-
-##### Correlations
-
-I'll use <a href="http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram">custom function</a> which calculates correlation p-Values. And in the correlogram i drop the correlations that aren't statistically valid. 
-
-Correlogram is organized so that positive correlations lie near diagonal axis. 
-
-Thing that cathes eye is that most of the correlations between chas and other variables seem to be statistically insicnificat. And there are lots of dark circles which means that variables correlate with each other.
-
-When i go through individual variables i will each time print variables that have either positive or negative correlation with active variable.
-
-
-
-```{r}
-# correlation matrix
-cMat <- cor(Boston,use="pairwise.complete.obs")
-
-# matrix of the p-value of the correlation
-p.mat <- cor.mtest(Boston)
-
-# Leave blank on no significant coefficient
-corrplot(cMat, type="upper", order="hclust", 
-         p.mat = p.mat, sig.level = 0.01, insig = "blank")
-```
-
-If correlation is __below -0.6__ or __above 0.6__ I consider it to be strong.
-
-```{r}
-cLimit = 0.6
-```
+Let's see what is our data made of. I will go through the variables one by one.
 
 ##### crim
 
-- __per capita crime rate by town__
+- per capita crime rate by town
 - right skewed distribution
 - 70 % of observations are below 2 
 - highest decile consist of values that really stand out of the overall distribution
-- in overall towns seem to be safe, but there are some bad neighborhoods
-- crim has a high positive correlation with  variable rad (0.6255051)
+- overall towns seem to be safe, but there are some bad neighborhoods
 
 ```{r}
 summary(Boston$crim)
@@ -163,76 +73,50 @@ ggplot(Boston, aes(crim)) +
   geom_histogram(binwidth=1,fill="white",colour="black") +
   labs(title="Per capita crime rate by town")
 
-(p = positiveCorrelation(cMat, 'crim', cLimit))
-cMat['crim',p]
-
-(p = negativeCorrelation(cMat, 'crim', cLimit))
-# cMat['crim',p]
 ```
 
 ##### zn
 
-- __proportion of residential land zoned for lots over 25,000 sq.ft.__ 
-- most common value is 0 (~ 0.74 %) 
-- lots over 25,000 seem to be quite rare 
-- zn has a high positive correlation with variable dis (0.6644082)
+- proportion of residential land zoned for lots over 25,000 sq.ft. 
+- lots over 25,000 seem to be quite rare because 74 % of areas don't have those
+- most common value is 0 (0.74 %)
 
 ```{r}
 summary(Boston$zn)
 
 nrow(Boston[which(Boston$zn == 0),])/nrow(Boston)
 
+prop.table(table(Boston$zn))
+
 ggplot(Boston, aes(zn)) +
   geom_histogram(binwidth=1,fill="white",colour="black") +
   labs(title="Proportion of residential land zoned for lots over 25,000 sq.ft",
        x = "Proportion %")
-
-
-(p = positiveCorrelation(cMat, 'zn', cLimit))
-cMat['zn',p]
-
-(p = negativeCorrelation(cMat, 'zn', cLimit))
-# cMat['zn',p]
 ```
 
 ##### indus
 
-- __proportion of non-retail business acres per town__
-- histogram seems a little bit polarised. Maby the right tail of histogram represents manufacturing areas?
-- indus has a high positive correlation with variables nox (0,76), tax (0,72), age (0,64) and  lstat (0,6)
-- indus has a high negative correlation with variable dis (-0.71)
-
-Note. Histogram is combined with density plot!
+- proportion of non-retail business acres per town. 
+- histogram seems little bit polarised. Maby the right tail of histogram represents manufacturing areas?
 
 ```{r}
 summary(Boston$indus)
 
 quantile(Boston$indus, probs = seq(0, 1, 0.1))
 
-ggplot(Boston, aes(x=indus)) + 
-    geom_histogram(aes(y=..density..),  
-                   binwidth=1,
-                   colour="black", fill="white") +
-    geom_density(alpha=.2, fill="#FF6666")  +
-    labs(title="proportion of non-retail business acres per town",
-       y = "Density",
+ggplot(Boston, aes(indus)) +
+  geom_histogram(binwidth=1,fill="white",colour="black") +
+  labs(title=" proportion of non-retail business acres per town",
        x = "Proportion %")
 
-
-p = positiveCorrelation(cMat, 'indus', cLimit)
-cMat['indus',p]
-
-(p = negativeCorrelation(cMat, 'indus', cLimit))
-cMat['indus',p]
 ```
 
 
 ##### chas
 
-- __Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)__ 
+- Charles River dummy variable (= 1 if tract bounds river; 0 otherwise). 
 - binary variable
 - 94 % of areas don't bound river
-- chas doesn't have either high positive or high negative correlation with other variables
 
 ```{r}
 summary(Boston$chas)
@@ -244,22 +128,12 @@ Boston %>%
   ggplot(., aes(bounds)) +
   geom_bar(fill="white",colour="black") + 
   labs(title="Bounds to Charles River")
-
-(p = positiveCorrelation(cMat, 'chas', cLimit))
-# cMat['chas',p]
-
-(p = negativeCorrelation(cMat, 'chas', cLimit))
-# cMat['chas',p]
 ```
 
 ##### nox
 
-- __nitrogen oxides concentration (parts per 10 million)__
+- nitrogen oxides concentration (parts per 10 million)
 - right skewed distribution with "bumps"
-- nox has a high positive correlation with variables indus (0.76),  age (0.73), tax (0,67) and rad (0.61)
-- nox has a high nevative correlation with variable  dis (-0.77)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$nox)
@@ -269,12 +143,6 @@ ggplot(Boston, aes(x=nox)) +
                    binwidth=.02,
                    colour="black", fill="white") +
     geom_density(alpha=.2, fill="#FF6666") 
-
-p = positiveCorrelation(cMat, 'nox', cLimit)
-cMat['nox',p]
-
-(p = negativeCorrelation(cMat, 'nox', cLimit))
-cMat['nox',p]
 ```
 
 ##### rm
@@ -282,10 +150,6 @@ cMat['nox',p]
 - average number of rooms per dwelling
 - distribution is near normal
 - typical value is 6
-- rh has high positive correlation with variable medv (0.7)
-- rh has high negative correlation with variable lstat (-0.61)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$rm)
@@ -297,12 +161,6 @@ ggplot(Boston, aes(x=rm)) +
     geom_density(alpha=.05, fill="#FF6666") +
     labs(title="Average number of rooms per dwelling",
        x = "Rooms")
-
-(p = positiveCorrelation(cMat, 'rm', cLimit))
-cMat['rm',p]
-
-(p = negativeCorrelation(cMat, 'rm', cLimit))
-cMat['rm',p]
 ```
 
 ##### age
@@ -310,8 +168,6 @@ cMat['rm',p]
 - proportion of owner-occupied units built prior to 1940.
 - dataset was published 1978, so variable tells the porpotion of at least fourty years old houses
 - mildly left skewed distribution that has "strong growth" in last decile
-- age has a high positive correlation with variables nox (0.73), indus (0.64) and lstat (0.60) 
-- age has a high negative correlation with variable dis (-0.75)
 
 ```{r}
 summary(Boston$age)
@@ -326,12 +182,6 @@ ggplot(Boston, aes(x=age)) +
     labs(title="Proportion of owner-occupied units built prior to 1940",
         x = "Proportion %", 
         y = "Density")
-
-p = positiveCorrelation(cMat, 'age', cLimit)
-cMat['age',p]
-
-(p = negativeCorrelation(cMat, 'age', cLimit))
-cMat['age',p]
 ```
 
 
@@ -339,10 +189,6 @@ cMat['age',p]
 
 - weighted mean of distances to five Boston employment centres. 
 - right skewed distribution that is most of areas are near employment centre
-- dis has a high correlation with variable zn (0.66)
-- dis has a high correlation with variables  indus (-0.71), age (-0.75) and nox (-0.77)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$dis)
@@ -355,12 +201,6 @@ ggplot(Boston, aes(x=dis)) +
     labs(title="weighted mean of distances to five Boston employment centres",
         x = "Distance", 
         y = "Density")
-
-(p = positiveCorrelation(cMat, 'dis', cLimit))
-cMat['dis',p]
-
-p = negativeCorrelation(cMat, 'dis', cLimit)
-cMat['dis',p]
 ```
 
 ##### rad
@@ -368,9 +208,6 @@ cMat['dis',p]
 - index of accessibility to radial highways
 - discrete
 - polarised
-- rad has a high correlation with variables tax (0.91), crim (0.63) and nox (0.61)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$rad)
@@ -383,20 +220,13 @@ ggplot(Boston, aes(x=rad)) +
     labs(title="index of accessibility to radial highways",
         x = "Index", 
         y = "Density")
-
-p = positiveCorrelation(cMat, 'rad', cLimit)
-cMat['rad',p]
-
-(p = negativeCorrelation(cMat, 'rad', cLimit))
 ```
+
 
 ##### tax
 
 - full-value property-tax rate per $10,000.
 - polarised variable
-- tax has a high positive correlation with variables rad (0.91), indus (0.72) and  nox (0.67)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$tax)
@@ -410,12 +240,6 @@ ggplot(Boston, aes(x=tax)) +
         x = "property-tax rate", 
         y = "Density")
 
-p = positiveCorrelation(cMat, 'tax', cLimit)
-cMat['tax',p]
-
-(p = negativeCorrelation(cMat, 'tax', cLimit))
-# cMat['tax',p]
-
 ```
 
 ##### ptratio
@@ -423,9 +247,6 @@ cMat['tax',p]
 - pupil-teacher ratio by town. 
 - left skewed distribution
 - mode value is 20 students per teacher
-- ptratio has a high correlation with variables rad (0.91), indus (0.72) and nox (0.67)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$ptratio)
@@ -438,12 +259,6 @@ ggplot(Boston, aes(x=ptratio)) +
     labs(title="Pupil-teacher ratio by town",
         x = "pupils per teacher", 
         y = "Density")
-
-p = positiveCorrelation(cMat, 'tax', cLimit)
-cMat['tax',p]
-
-(p = negativeCorrelation(cMat, 'tax', cLimit))
-# cMat['tax',p]
 ```
 
 ##### black
@@ -451,9 +266,6 @@ cMat['tax',p]
 - 1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town
 - left skewed distribution
 - over 80 % of observations have value greater than 364
-- black  doesn't have either high positive or high negative correlation with other variables
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$black)
@@ -469,24 +281,14 @@ ggplot(Boston, aes(x=black)) +
         x = "proportion of blacks by town", 
         y = "Density")
 
-p = positiveCorrelation(cMat, 'black', cLimit)
-# cMat['black',p]
-
-(p = negativeCorrelation(cMat, 'black', cLimit))
-# cMat['black',p]
-
 ```
 
 
 ##### lstat
 
-- __lower status of the population (percent)__
+- lower status of the population (percent). 
 - right skewed distribution
 - there are some poor regions?
-- lstat has a high positive correlation with variables indus (0.60) and age (0.60)
-- lstat has a high negative correlation with variables rm (-0.61) and medv (-0.74)
-
-Note. Histogram is combined with density plot!
 
 ```{r}
 summary(Boston$lstat)
@@ -501,21 +303,13 @@ ggplot(Boston, aes(x=lstat)) +
     labs(title="lower status of the population (percent)",
         x = "percentage", 
         y = "Density")
-
-p = positiveCorrelation(cMat, 'lstat', cLimit)
-cMat['lstat',p]
-
-p = negativeCorrelation(cMat, 'lstat', cLimit)
-cMat['lstat',p]
 ```
 
 ##### medv
 
-- __median value of owner-occupied homes in $1000s__ 
+- median value of owner-occupied homes in $1000s. 
 - there are some 20 high value areas that stand out
 - otherwise distribution is near normal
-- medv has a high positive correlation with variable rm (0,7)
-- medv has a high negative correlation with variable lstat (-0.74)
 
 ```{r}
 summary(Boston$medv)
@@ -532,34 +326,80 @@ ggplot(Boston, aes(x=medv)) +
     labs(title="median value of owner-occupied homes in $1000s",
         x = "$1000s", 
         y = "Density")
+```
 
-(p = positiveCorrelation(cMat, 'medv', cLimit))
-cMat['medv',p]
+##### Correlations
 
-(p = negativeCorrelation(cMat, 'medv', cLimit))
-cMat['medv',p]
+Let's see what the varible correlations look. 
+
+I'll use <a href="http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram">custom function</a> which calculates correlation p-Values. And in the correlogram i drop the correlations that aren't statistically valid. 
+
+https://www.kaggle.com/erikbruin/house-prices-lasso-xgboost-and-a-detailed-eda
+
+```{r}
+# custom function that calculates p-values
+cor.mtest <- function(mat, ...) {
+    mat <- as.matrix(mat)
+    n <- ncol(mat)
+    p.mat<- matrix(NA, n, n)
+    diag(p.mat) <- 0
+    for (i in 1:(n - 1)) {
+        for (j in (i + 1):n) {
+            tmp <- cor.test(mat[, i], mat[, j], ...)
+            p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+        }
+    }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+
+# correlation matrix
+M <- cor(Boston, , use="pairwise.complete.obs")
+
+# matrix of the p-value of the correlation
+p.mat <- cor.mtest(Boston)
+
+# Leave blank on no significant coefficient
+corrplot(M, type="upper", order="hclust", 
+         p.mat = p.mat, sig.level = 0.01, insig = "blank")
+
 ```
 
 
-##  Part III
+Finally I'll print the correlations between values.
+
+```{r}
+cor_sorted <- as.matrix(sort(M[,'medv'], decreasing = TRUE))
+CorHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)>0.5)))
+
+cor_numVar <- M[CorHigh, CorHigh]
+
+corrplot.mixed(cor_numVar)
+               #tl.col="black", 
+               #tl.pos = "lt")
+
+```
+
+
+
+###  Part III
 
 Next I will replace the original dataset with standardized dataset. 
 
-After standardization each variable has zero mean and variance of one unit. 
+After standardization each variable has zero mean and unit variance. 
 
-Standardization is common work procedure in data analysis. One main reason for this is that some tasks like dimension reduction give more accurate results when all the variables have same scale. 
+Standardization is common workprocedure in data analysis. One main reason for this is that some procedures like dimension reduction give more accurate results when all the variables have same scale. 
 
-Note! LDA which we are going to use later on in this exercise has assumption varibles have same variance.
+- LDA which we are going to use later on in this exercise has assumption varibles have same variance
 
-And if we take a closer look of couple variables, we see what happens.
-
-In original data:
-- nox has range 0.385 to 0.8710
-- zn has  had range 0 to 100
+There is:
+- nox which had range 0.385 to 0.8710
+- zn which had range 0 to 100
 
 After standardization:
 - nox has range -1.4644 to 2.7296
 - zn has range from -0.48724 to 3.8004
+
 
 ```{r}
 Boston <- as.data.frame(
@@ -570,9 +410,9 @@ summary(Boston)
 # sd(Boston$zn)
 ```
 
-Then i will create new category variable based on crime rate values.
-
-Values are cut four bins based on the quantiles. After that will replace original continous variable with created category variable.
+Then i will create new category variable based on crimerate values.
+- Values are cut four bins based on the quantiles
+- Finally i will replace original continous variable with created category variable
 
 ```{r}
 breaks <- quantile(Boston$crim, probs = seq(0,1,0.25))
@@ -588,7 +428,6 @@ Boston$crim <- crime
 ```
 
 Finally i will divide dataset to train and test sets. 
-
 - Split will be 80/20. 
 - 80 % of observations go to the trainset
 - Split is done by means on random sampling
@@ -607,7 +446,7 @@ train <- Boston[ind,]
 test <- Boston[-ind,]
 ```
 
-## Part IV
+### Part IV
 
 It's time to fit a LDA model. Then i'll print the summary of the model.
 
@@ -615,15 +454,13 @@ One thing that chatches eye is the porpotion of trace: first linear discriminant
 
 ```{r}
 lda.fit <- lda(crim ~ ., data = train)
-
-lda.fit
 ```
 
-Then i will draw the LDA (bi)plot. I'll skip the arrows, because i think they distract more than explain.
+Then i will draw the LDA (bi)plot. I'll skip the arrows, because i think that they distract more than explain
 
-Data is polarised; high values define distinct groub. Which probaply explains the high percentage of LD1
-
-Division between: low,med_low,med_high depend more on LD2 and LD3 and there aren't clear class boundaries. Maby dataset doesn't have enough information for LDA or maby task is beyond capablities of linear model..
+- polarised: high values define distinct groub
+- which probaply explains the high percentage of LD1
+- division between: low,med_low,med_high depend more on LD2 and LD3 and there aren't clear class boundaries. Maby set doesn't have enough info or LDA or maby task is beyond capablities of linear model..
 
 ```{r}
 # target classes as numeric
@@ -659,9 +496,9 @@ df = data.frame(obs = categories,
 
 Finally I will analyse results with caret -packages confusionMatrix -function, which will print detailed overview of results.
 
-- Model accuracy is way higher than __No Information rate__. No information rate is so low because there isn't any dominant class in test set.
-- In the (bi)Plot of the model we noticed that groub: __High__ was clearly separated of the rest of classess. That separation can also be seen in the prediction results: sensitivity of __Class: high__ is almost 100 %.
-- And model has difficulities with __low__, __med_low__ and __med_high__ classess, which didn't have disctinct borders in the (bi)plot either.
+- Model accuracy is way higher than No Information rate. No information rate is so slow because there isn't any dominant class in test set.
+- In the (bi)Plot of the model we noticed that groub High is clearly separated of the rest of classess. That separation can also be seen in the prediction results: sensitivity High is were high.
+- And model has difficulities with low, med_low and med_hihg classess, which didn't have disctinct borders in the (bi)plot either.
 
 ```{r}
 # for starters let's print the distibution of true values
@@ -678,7 +515,16 @@ print(confusionMatrix(xtab))
 
 ## Part VI
 
-For the last part of this weeks exercises i'll eeload the Boston dataset and standardize the dataset.
+- Reload the Boston dataset and standardize the dataset
+Calculate the distances between the observations.
+Run k-means algorithm on the dataset. 
+
+Investigate what is the optimal number of clusters
+
+and run the algorithm again. 
+
+Visualize the clusters (for example with the pairs() or ggpairs() functions, where the clusters are separated with colors) and interpret the results. (0-4 points)
+
 
 ```{r}
 # clear memory und reload data
@@ -764,35 +610,52 @@ ggplot(df, aes(y = val, x = factor(n), group = 1)) +
 
 No that the number of clusters is fixed. I'll run the clustering once again.
 
+Visualize the clusters (for example with the pairs() or ggpairs() functions, where the clusters are separated with colors) and interpret the results.
+
 ```{r}
-Boston$clust <- as.factor(kmeans(Boston, 2)$cluster)
-
+Boston$clust <- kmeans(Boston, 2)$cluster
 ```
 
-I'll visualize results by means of ggpairs plot.
+```{r}
+breaks <- quantile(Boston$crim, probs = seq(0,1,0.25))
 
-```{r message=FALSE, warning=FALSE, out.width = '100%'}
-ggpairs(Boston,
-             mapping = aes(col = clust))
+crime <- cut(Boston$crim, 
+             breaks = breaks, 
+             labels = c("low","med_low","med_high","high"),
+             include.lowest = TRUE)
 
-Boston %>%
-  group_by(clust) %>%
-  summarise(n =n(), a = median(age))
+# replace continous variable with category variable
+Boston$crim <- crime
 ```
 
-Because there are "so much" variables, plot becomes disorganized.
 
-But here are some notes:
 
-- G2 has two times more instances than G1
+VIZ
 
-Diagonal axis:
-- variable rm G1 and G2 have similar distributions
-- variable tax distributions are opposides, G2 is right skewed and G1 left skewed.
+```{r}
+sne_obj <- Rtsne(dist_Boston, is_distance = TRUE)
 
-So tax values have greater influense when clustering.
+tsne_data <- sne_obj$Y %>%
+  data.frame() %>%
+  setNames(c("X", "Y")) %>%
+  mutate(cluster = Boston$clust) %>%
+  mutate(crime = Boston$crim)
 
-And then there are variables like age, where G2 has even distribution and age is extremely left skewed. G2 has houses from various age-groups, while houses in G1 are old. 
 
-Variable dis has opposite behaviour when inspected from clustering viewpoint.
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = cluster, size=crime))
+
+library(ggalt)
+
+midwest_select <- tsne_data[tsne_data$cluster == 2,]
+
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = crime)) +
+  geom_encircle(aes(x = X, y = Y), 
+                data = midwest_select,
+                color="red", 
+                size=1, 
+                expand=0.02)
+
+```
 
