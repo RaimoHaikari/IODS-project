@@ -1,0 +1,552 @@
+---
+title: "Week5: Dimensionality reduction techniques"
+output:
+  html_document:
+    theme: cerulean
+    author: "Raimo Haikari"
+---
+
+# Dimensionality reduction techniques
+
+Load the packages and turn of scientific notation (of numbers):
+
+```{r,message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+
+library(ggplot2)
+library(corrplot)
+
+library(GGally)
+library(FactoMineR)
+library(factoextra)
+
+options(scipen=999) # disable scientific notation
+```
+
+
+This weeks dataset originates from the United Nations Development dataset. Datasets purpose is to compare living conditions in different countries. We don't use original dataset, instead we have pruned where:
+- some of the variables have been dropped off
+- two new ratio variables have been added (Edu2.FM, Labo.FM)
+
+More information about the dataset can be found <a href="http://hdr.undp.org/en/content/human-development-index-hdi">here</a> and <a href="http://hdr.undp.org/sites/default/files/hdr2015_technical_notes.pdf">here</a>.
+
+Read data:
+
+```{r}
+url = "http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/human2.txt"
+human <- read.table(url, sep=",", header=TRUE)
+```
+
+## Part I
+
+I'll start with correlations. In the graph blue circles mean positive correlation and red circles mean negative correlation, size and brightnes of color reflect the strenght of correlation. I'll comment correlations later when i go through individual variables.
+
+```{r}
+# calculate the correlation matrix and round it
+cor_matrix<-cor(human) %>% round(digits = 2)
+
+# visualize the correlation matrix
+corrplot.mixed(cor_matrix, number.cex = .7, tl.pos = "d", tl.cex = 0.6)
+```
+
+When number of variables is relatively small, like in this case, ggpairs -function prints handy summary graph. With custom function found from <a href="https://stackoverflow.com/questions/35085261/how-to-use-loess-method-in-ggallyggpairs-using-wrap-function">stackoverflow</a> I added "regression lines" to the scatterplots.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,  out.width = '100%', comment=''}
+
+my_fn <- function(data, mapping, method="loess", ...){
+      p <- ggplot(data = data, mapping = mapping) + 
+      geom_point() + 
+      geom_smooth(method=method, ...)
+      p
+    }
+
+ggpairs(human, lower = list(continuous = my_fn))
+```
+
+##### Edu2.FM
+
+It is a radio of variables:
+
+- proportion of females with at least secondary education
+- proportion of males with at least secondary education
+
+When value is:
+
+- below one, more men than woman have at least secondary education
+- near one both gender are roughly equally educated
+- above one, more woman than men have at least secondary education
+
+Education ratio:
+
+- has moderate positive correlations with Edu.Exp (0.59) and Life.Exp (0.58)
+- has moderate negatice correlations with Mat.Mor (-0.66) and Ado.Birth (-0.53)
+
+Judging by the density plot in most of the countries both gender have roughly similar opportunities to get basic education, but there are still many countries where mostly boys go to school. 
+
+Ratio tells about the level of education system and country in overall, so it makes sense that it has positive correlation with expected years of education. And when people are more educated they have changes at live more healty and longer life, which also includes that women have other possibilities that "start making babies as soon as possible". 
+
+```{r}
+summary(human$Edu2.FM)
+
+cor_matrix['Edu2.FM',]
+
+ggplot(human, aes(x=Edu2.FM)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=.05,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+Overall (ggpairs) print reveals something interesting in relationship between "education gender equality" (Edu2.FM) and expected years of Expected years of schooling (Edu.Exp). That is when value of Edu2.FM increases value of Edu.Exp also increases until Edu2.FM reaches value 1, after that expected years of education starts to decrease. 
+
+That can be seen, if print scatterpolot of those variables and add "loess regression line" to it.
+
+```{r}
+ggplot(human, aes(x=Edu2.FM, y=Edu.Exp)) +
+  geom_point() +
+  geom_smooth(method = 'loess')
+```
+
+And if we limit dat to values where Edu2.FM is 1 or less, correlation between Edu2.FM and Edu.Exp rises to 0.76.
+
+```{r}
+human %>%
+  filter(Edu2.FM <= 1) %>%
+  dplyr::select(Edu2.FM, Edu.Exp) %>%
+  cor()
+```
+
+Similar turning point can be seen in other moderate correlation relationships. 
+
+##### Labo.FM
+
+Is a radio of variables:
+
+- proportion of females in the labour force
+- proportion of males in the labour force
+
+It doesn't correlate with other variables. (Judging by the GGPAIRS plot there seems to be "turning points" in some scatterplots)
+
+And practically in all countries proportion of males in the labous force is higher than females.
+
+```{r}
+summary(human$Labo.FM)
+
+cor_matrix['Labo.FM',]
+
+ggplot(human, aes(x=Labo.FM)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=.1,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+##### Edu.Exp
+
+Expected years of schooling.
+
+Judging by the summary and graph in majority of countries value lies somewhere between 12 -  16 years.
+
+It has:
+
+- moderate/high positive correlation with Edu2.FM (0.59) and Life.Exp (0.79)
+- high negative correlation with Mat.Mor (-0,74) and Ado.Birth (0.79)
+
+Which is in par with earlier interpretation that education is good estimator of how good it is to live in particular country. People live longer, giving birth is safer and woman have other choises in life than to "be fruitful and increase in number"
+
+```{r}
+summary(human$Edu.Exp)
+
+cor_matrix['Edu.Exp',]
+
+ggplot(human, aes(x=Edu.Exp)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=1,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+
+```
+
+Scatterplot of varibles __Expected years of schooling__ (Edu.Exp) and __Adolescent birth rate__ (Ado.Birth) illustrates how grls risk to become mother in their teens decreases when they have change to participate education.
+
+```{r}
+ggplot(human, aes(x=Edu.Exp, y=Ado.Birth)) +
+  geom_point() +
+  geom_smooth(method = 'loess')
+```
+
+##### Life.Exp
+
+Life expectancy at birth.
+
+In almost 70 % of countries people have a life expectancy of at least 70 years.
+
+Variable has:
+
+- moderate/high correlation with Edu2.FM (0,58), Edu.Exp (0.79), GNI (0,63)
+- high negative correlation with Mat.Mor and Ado.Birth
+
+```{r}
+quantile(human$Life.Exp, probs = seq(0, 1, 0.1))
+
+cor_matrix['Life.Exp',]
+
+ggplot(human, aes(x=Life.Exp)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=2,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+##### GNI
+
+Gross National Income per capita
+
+GNI has right skewed distribution. About half of countries have GNI no more than 10000. Distribution has a "long tail" so on the other half of countries GNI starts to increase fast.
+
+Variable has:
+
+- moderate correlation with Edu.Exp (0.62) and Life.Exp (0.63)
+- moderate negative correlation with Mat.Mor (-0.5) and Ado.Birth (-0.56)
+
+```{r}
+quantile(human$GNI, probs = seq(0, 1, 0.1))
+
+cor_matrix['GNI',]
+
+ggplot(human, aes(x=GNI)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=1000,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+##### Mat.Mor
+
+Maternal mortality ratio
+
+Variable has:
+
+- high positive correlation with Ado.Birth (0.76) 
+- moderate negative correlation with Edu.Exp (-0.74), Life.Exp (-0.86) and Edu2.FM (-0.66)
+
+Like GNI has Mat.Mor right skewed distribution.
+
+```{r}
+summary(human$Mat.Mor)
+
+cor_matrix['Mat.Mor',]
+
+ggplot(human, aes(x=Mat.Mor)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=50,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+
+##### Ado.Birth
+
+Adolescent birth rate.
+
+Variable has:
+
+- high positive correlation with Mat.Mor (0.76) 
+- moderate negative correlation with Edu.Exp (-0.70), Life.Exp (-0.73), GNI(-0.56) and Edu2.FM (-0.53)
+
+It has right skewed distribution which means that in most of the countries adolescent birth rate is low.
+
+```{r}
+summary(human$Ado.Birth)
+
+cor_matrix['Ado.Birth',]
+
+ggplot(human, aes(x=Ado.Birth)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=10,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+Interaction between  variables Mat.Mor (Maternal mortality ratio) and Ado.Birth (Adolescent birth rate) is almost linear.
+
+Where county positions itself in this graph tell's a lot about the livinconditions and state of society.
+
+```{r}
+ggplot(human, aes(y=Mat.Mor, x=Ado.Birth)) +
+  geom_point() +
+  geom_smooth(method = 'loess')
+```
+
+
+##### Parli.F
+
+And last but not least: Percetange of female representatives in parliament
+
+It doesn't correlate with other variables. 
+
+It has right skewed distribution. 
+
+Men seem to dominate parliaments all over the world. In 80 % of countries womens share of parliament seats is 30 % or less.
+
+```{r}
+quantile(human$Parli.F, probs = seq(0, 1, 0.1))
+
+cor_matrix['Parli.F',]
+
+ggplot(human, aes(x=Parli.F)) + 
+    geom_histogram(aes(y=..density..),  
+                   binwidth=2,
+                   colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666") 
+```
+
+Highest percetange of female representatives in parliament is in Rwanda. It's is interesting to compare Rwanda with Finland in values that measure female / male ratios:
+
+```{r}
+human %>%
+  mutate(name = rownames(human)) %>%
+  filter(name == "Rwanda" | name == "Finland") %>%
+  dplyr::select(name, Labo.FM, Edu2.FM, Parli.F)
+```
+
+
+## Part II
+
+It's time for pricipal component analysis. First i'll use raw data, without any preprosessing. 
+
+I'll use R prcomp() -method, which according to the Datacamp is preferred version
+
+```{r}
+# PCA 
+pca_raw <- prcomp(human)
+```
+
+Summary of analysis show's that 0.9999 of variance is captured by the first pricipal component. 
+
+
+```{r}
+summary(pca_raw)
+```
+
+Reason for this is, that PCA components are calculated in iterative manner so that, each component explains as much of the variance left in data as possible. When variables have different range, like our unprocessed data, variables with large scale distort the whole process. 
+
+When we print the variable ranges, we can see, that GNI has huge range when compared with other variables.
+
+```{r}
+sapply(human, range)
+```
+
+And if we print the PC1 loadings, which tells each variables input to that component, we see that GNI:s value is near -1. Which means that in practically PC1 is dedicated to GNI.
+
+```{r}
+pca_raw$rotation[,1]
+```
+
+And Because first component "explains" practically all the variance, biplot can't print other component arrows. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,  out.width = '100%', comment=''}
+biplot(pca_raw, 
+       choices = 1:2,
+       cex = c(0.5, 0.8), # eka tietueiden fonttikoko, toka nuolten fonttikoko
+       col = c("grey40", "black")
+       )
+```
+
+## Part III
+
+Let's see what happens when data is standardized before PCA.
+
+After standardization each variable has mean 0 and standard deviation of one unit.
+
+```{r}
+human_std <- as.data.frame(scale(human, center = T, scale = T))
+```
+
+And variables have similar ranges:
+
+```{r}
+sapply(human_std, range)
+```
+
+When PCA is run with standardized data:
+
+- PC1 explains 0.5361 of the total variance vs. 0.9999 % when data was unprocessed
+- PC2 explains 0.1624 of the total variance vs. 0.0001 % when data was unprocessed
+- all the other component have "somekind of value"
+
+
+```{r}
+pca_std <- prcomp(human_std)
+
+summary(pca_std)
+```
+
+Before biplot I'll print:
+
+- Countries with lowest PC1 values:
+
+```{r}
+a <- pca_std$x[,'PC1']
+head(sort(a))
+
+```
+
+- Countries with highest PC1 values:
+
+```{r}
+head(sort(a, decreasing = T))
+```
+
+- Countries with lowest PC2 values:
+
+```{r}
+b <- pca_std$x[,'PC2']
+head(sort(b))
+```
+
+- Countries with highest PC2 values:
+
+```{r}
+head(sort(b, decreasing = T))
+```
+
+Time for the plot:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,  out.width = '100%', comment=''}
+biplot(pca_std, 
+       choices = 1:2,
+       cex = c(0.5, 0.8), # eka tietueiden fonttikoko, toka nuolten fonttikoko
+       col = c("grey40", "black")
+       )
+```
+
+## Part IV
+
+In the plot:
+
+- more left contry is the better
+- more high country is the better
+
+So:
+
+- top left is place to be
+- bottom right is worst case scenario
+
+PC1 is divided by variables
+
+- Edu.Exp, GNI, Edu2.FM and Life.Exp: high values move country to decired direction. 
+- Mat.Mor and Ado.Birth : higher values are consider worse
+
+And it makes sense, that countries where e.g life  expectancy at birth is long and Gross National Income per capita is high are preferred when compared to countries where Adolescent birth rate and Maternal mortality ratio is high.
+
+PC2 
+
+- Parli.F and Labo.FM: higher values are better. 
+
+And interpretation is that countries where genders have equal rights and possibilies, at least judging by these statistics, are better.
+
+## Part V
+
+Load the data
+
+```{r}
+rm(list=ls())
+
+data(tea)
+```
+
+It has 36 variables and 300 observations.
+
+- 35 factor variables
+- one numeric variable (age)
+
+```{r}
+dim(tea)
+
+sum(sapply(tea, is.factor))  # Number of factor variables
+sum(sapply(tea, is.numeric)) # Number of numeric variables
+```
+
+By using gather() -method, we can print overview of the variables. The print looks better when working with core Rmd-file. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig_height: 10, out.width = '100%', comment=''}
+tea %>%
+  dplyr::select(-one_of("age")) %>%
+  gather() %>%
+  ggplot(aes(value)) +
+  geom_bar() +
+  facet_wrap("key", scales = "free") + 
+  theme(text = element_text(size=10)) 
+```
+
+For my analysis, i choose six variables from the diagonal axis. Chosen variables are: Tea, sophisticated, pub, how, frequency, effect.on.health.
+
+```{r}
+mca <- tea %>%
+  dplyr::select(Tea, sophisticated, pub, how, frequency, effect.on.health) %>%
+  MCA(., graph = FALSE)
+```
+
+Now that we got our model, we can try fo interpret it. 
+
+In the summary:
+
+__Eigenvalues__ stores the components. And like in PCA, components are kind of new way to express the data, where:
+
+- each dimension explains part of the variance in the data
+- first dimension explains most, second little less and so on
+- together componen't express all of the variance.
+
+Model has 10 dimension and there doesn't seem to be any dominant groubs.
+
+__Individuals__ presents 10 first observations
+
+- their coordinates in three first categories
+- ctl-column tells observations contribution in the formation of that component. 
+- cos2 is a statistic that measures strength between observation and dimension.
+
+__Categories__ presents the 10 first categories. Categories are the values of attributes. 
+
+-First there is the coordinate in the direction of the dimension. 
+- And then there are the contribution and strength values. 
+- v.test is a test statistic for the hypothesis that coordinate differs from 0
+
+If we peek a the values, we see that the in Dim.1 black and green have something in common because they have positive coordinates and they differ ftom the Earl Grey tea which have negative coordinate.
+
+__Categorical variables__ are the 6 variables that were chosen; Coordinates of the first three dimensions are shown. Value tells about the strenght of connection. 
+
+So in the Dim.1 frequency (0.400) plays more important part than effect.on.health (0.046).
+
+```{r}
+summary(mca)
+```
+
+##### Plotting
+
+Page <a href="http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/114-mca-multiple-correspondence-analysis-in-r-essentials/">Articles - Principal Component Methods in R: Practical Guide</a> show examples of MCA plots and their explanations.
+
+```{r}
+fviz_mca_var(mca, 
+             repel = TRUE, # Avoid text overlapping (slow)
+             ggtheme = theme_minimal())
+```
+
+The plot above shows the relationships between variable categories. It can be interpreted as follow:
+
+- Variable categories with a similar profile are grouped together.
+- Negatively correlated variable categories are positioned on opposite sides of the plot origin (opposed quadrants).
+- The distance between category points and the origin measures the quality of the variable category on the factor map. Category points that are away from the origin are well represented on the factor map.
+
+
+In the second plot 
+
+Summary told that frequency is more important factor to the Dim.1 than effect.on.health. If we plot observations based on those variables so that they are colored by the groub and each groubs centroid is highlighted. We see that groub centroids of frequency cover larger part of Dim1 axis than e.o.h centroids.
+
+```{r}
+fviz_ellipses(mca, c("frequency", "effect.on.health"),
+              geom = "point")
+
+```
+

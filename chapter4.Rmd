@@ -810,7 +810,11 @@ Boston <- as.data.frame(scale(Boston))
 
 # clustering 
 set.seed(8520)
+
 Boston$clust <- as.factor(kmeans(Boston, 8)$cluster)
+#kmB <- kmeans(Boston, centers = 3)
+#lda.fit <- lda(kmB$cluster ~ ., data = Boston)
+
 
 # table(Boston$clust)
 

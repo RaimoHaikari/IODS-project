@@ -987,7 +987,11 @@ Boston &lt;- as.data.frame(scale(Boston))
 
 # clustering 
 set.seed(8520)
+
 Boston$clust &lt;- as.factor(kmeans(Boston, 8)$cluster)
+#kmB &lt;- kmeans(Boston, centers = 3)
+#lda.fit &lt;- lda(kmB$cluster ~ ., data = Boston)
+
 
 # table(Boston$clust)</code></pre>
 <p>Then I’ll perform the LDA analysis.</p>
