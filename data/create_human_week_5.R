@@ -19,8 +19,21 @@ library(stringr)
 linkToData <- "http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/human1.txt"
 human <- read.csv(linkToData, stringsAsFactors = F)
 
-# Various ratio variables, where proportion of participation between females and males are summarised.
-# e.g Edu2.FM percentage of girls get educated is divided by percentage of boys get educated.
+
+# Idea is to compare aspects like living conditions, gender equality and level of development. 
+# Typically countries are ranked on based of their gross national product. 
+# This dataset aims to find out how much of states incomes are used to the benefit of people.
+# 
+# There are some core numeric values, like:
+# - life expectancy (Life.Exp) and 
+# - expected years of education (Edu.Exp)
+#
+# Rratio variables, where proportion of participation between females and males are summarised.
+# - e.g Edu2.FM percentage of girls get educated is divided by percentage of boys get educated
+# 
+# More information can be found;
+# - http://hdr.undp.org/en/content/human-development-index-hdi
+# - http://hdr.undp.org/sites/default/files/hdr2015_technical_notes.pdf
 
 # Dataset has 195 observations of 19 variables
 dim(human)
