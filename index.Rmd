@@ -47,3 +47,8 @@ output:
 ```
   
 ***
+
+  
+```{r child = "chapter6.Rmd"}
+```
+  

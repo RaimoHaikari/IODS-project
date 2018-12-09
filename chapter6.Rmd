@@ -38,13 +38,13 @@ rats$Group <- factor(rats$Group)
 
 Check that data looks like it is supposed to.
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 glimpse(rats)
 ```
 
 And as stated in wrangling part: rats are divited into 3 died groubs - and there are different amount of rats in those gropbs.
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 rats %>% 
   filter(Time == 1) %>%
   group_by(Group) %>%
@@ -156,13 +156,13 @@ bprs$subject <- factor(bprs$subject)
 
 ### Multiple linear regression
 
-To begin, we will plot the data, indentifying the observations in both group but ignoring the longitudinal nature of the data. Book separated different groups using numbers, but I'll confine to with colors and shapes.
+To begin, we will plot the data, indentifying the observations in both groups but ignoring the longitudinal nature of the data. Book separated different groups using numbers, but I'll confine to colors and shapes.
 
 By looking at the plot, it seems that:
 
-- there might be small downward trend
-- there might be one or two outliers in group treatment 2
-- difficult to say wether members of other groups would be doing better than other groups 
+- there might be (small) downward trend
+- there might be one or two outliers in group "treatment 2"
+- difficult to say wether members of either groups are doing better than other in the other group 
 
 ```{r}
 ggplot(bprs, aes(x = week, y = bprs)) +
@@ -175,18 +175,19 @@ Then i'll setup a multiple linear regression model:
 - ignoring the longitudinal nature of the measurements
 - explicitly dummy-encoding treatment group variable
 
-In summary:
-
-- residulals don't look promising; median value should be near zero and distributed evenly
-- now the positive spread is much wider
-- large p-Value of T1 tells that model doesn't consider dirrerence between the treatment groups important
-- week is considered important
-
 ```{r}
 lmFit <- bprs %>%
   mutate(T1 = ifelse(treatment==1,1,0)) %>%
   lm(bprs ~ week + T1, data = .)
+```
 
+In summary:
+
+- residulals don't look promising; median value should be near zero and distributed evenly, in the model positive spread is much wider
+- large p-Value of T1 tells that model doesn't consider dirrerence between the treatment groups important
+- week is considered important
+
+```{r}
 summary(lmFit)
 ```
 
@@ -202,10 +203,10 @@ bprs %>%
 
 ```
 
-If we try to reproduce something exatly like figure 9.2 with BPRS data graph isn't particular informative. So i think that plotting disctinct graphs for both treatment gropus works better.
+If we try to reproduce something exatly like figure 9.2 with BPRS data, graph isn't particular informative. So i think that plotting disctinct graphs for both treatment gropus works better.
 
 - noqw we can see downward in treatment group 1 
-- treatment group 2 is bit turbulent
+- treatment group 2 is bit turbulent, there is also downward trend but with few exeptions 
 
 ```{r}
 ggplot(bprs, aes(x = week, y = bprs, linetype = subject)) +
@@ -219,9 +220,6 @@ ggplot(bprs, aes(x = week, y = bprs, linetype = subject)) +
 
 This model allows the linear regression fit for each patient to differ in intercept from other patiens.
 
-
-- T1: 1.3034 -> 1.0761 Ei menny niinkuin piti...
-
 ```{r}
 rimFit <- bprs %>% 
   mutate(T1 = ifelse(treatment==1,1,0)) %>%
@@ -234,7 +232,7 @@ Then i'll try to get something out of summary:
 
 - residuals seem to behave better than in first model
 - Std. Error of week has improved. In "standard linear model" it was 0.2524 and now it is 0.2084. This is because model now takes account of within-subject depencies of the bprs measurements
--variance in subject is smaller than variance in residuals. I would interpret that subject vise information is less than noise
+- looking at random effects, variance in subject is smaller than variance in residuals. I would interpret that there is more noise in model than subject related information
 
 The book example demonstrated between-subject effect in __group Std. Errors__ between Multiple Linear Regression model and Random intercept models when using Rats-data, but i don't notice similar effect when using BPRS - data.
 
@@ -244,9 +242,9 @@ summary(rimFit)
 
 Let's plot a graph that shows side by side of both treatment groups measured vs. fitted values.
 
-Hmmm... i might have error in somewhere because fitted values of treatment groups 1 and 2 look identical - or maby it's because model haven't got enought information, T1 value of summary might indicate this.
+Hmmm... i might have error in somewhere because fitted values of treatment groups 1 and 2 look identical - or maby it's because model haven't got enought information to make distinction, level of T1 value in summary might indicate this.
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%'}
 # Create a vector of the fitted values
 Fitted <- fitted(rimFit)
 
@@ -313,20 +311,130 @@ riNrsFit <-  bprs %>%
 summary(riNrsFit)
 ```
 
+If we compare model using anova __The random intercept and random slope model__ is significantly different form model __Random intercept model__ at 0.05 level.
 
+```{r}
+anova(rimFit, riNrsFit)
+```
+
+In the plot:
+
+- fitted graphs still look identical
+- in the fitted graphs slopes vary
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%'}
+# Create a vector of the fitted values
+Fitted <- fitted(riNrsFit)
+
+bprs$Fitted <- Fitted
+
+yMax = max(max(bprs$bprs),max(bprs$Fitted))
+yMin = min(min(bprs$bprs),min(bprs$Fitted))
+
+p1 <- bprs %>%
+  filter(treatment == 1) %>%
+  ggplot(., aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 1: measured values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p2 <- bprs %>%
+  filter(treatment == 1) %>%
+  ggplot(., aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 1: fitted values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p3 <- bprs %>%
+  filter(treatment == 2) %>%
+  ggplot(., aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 2: measured values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p4 <- bprs %>%
+  filter(treatment == 2) %>%
+  ggplot(., aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 2: fitted values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+```
 
 
 ### Random Intercept and Random Slope Model with interaction
 
-```{r}
-summary(
-  bprs %>%
-    mutate(T1 = ifelse(treatment==1,1,0)) %>%
-    lmer(bprs ~ week + T1 + (week | subject) + (week * treatment), 
-         data = .,
-         REML = FALSE)
-)
+Finally, we can fit a random intercept and slope model that allows for a __week__ x __treatment__ interaction
 
+```{r}
+finalModel <- bprs %>%
+  mutate(T1 = ifelse(treatment==1,1,0)) %>%
+  lmer(bprs ~ week + T1 + (week | subject) + (week * T1), 
+       data = .,
+       REML = FALSE)
 
 ```
 
+
+```{r}
+summary(finalModel)
+```
+
+Judging by anova -test, there doesn't seem to clear improvement in this model vs. previous model:
+
+```{r}
+anova(riNrsFit,finalModel)
+```
+
+And plot looks a lot like previous plot:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%'}
+Fitted <- fitted(finalModel)
+
+bprs$Fitted <- Fitted
+
+yMax = max(max(bprs$bprs),max(bprs$Fitted))
+yMin = min(min(bprs$bprs),min(bprs$Fitted))
+
+p1 <- bprs %>%
+  filter(treatment == 1) %>%
+  ggplot(., aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 1: measured values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p2 <- bprs %>%
+  filter(treatment == 1) %>%
+  ggplot(., aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 1: fitted values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p3 <- bprs %>%
+  filter(treatment == 2) %>%
+  ggplot(., aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 2: measured values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p4 <- bprs %>%
+  filter(treatment == 2) %>%
+  ggplot(., aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 2: fitted values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+Final conclusion. Any of the model don't feel good. Maby i missed something or BPRS data doesn't have enough information.
