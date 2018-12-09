@@ -1,0 +1,332 @@
+---
+title: "Week6: Analysis of longitudinal data"
+output:
+  html_document:
+    theme: cerulean
+    author: "Raimo Haikari"
+---
+
+Load the packages:
+
+```{r,message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+
+library(ggplot2)
+library(gridExtra)
+library(lme4)
+```
+
+# Analysis of longitudinal data
+
+## Graphical Displays and Summary Measure Approach
+
+If i got it right, in the first part we are supposed to produce similar plot like in chapter 8 of the book Multivariate Analysis for the Behavioral Sciences, 2nd Edition, but with rats data.
+
+Read the data:
+
+```{r}
+rm(list=ls())
+
+linkToData <- "data/rats.csv"
+rats <- read.csv(linkToData, stringsAsFactors = T)
+
+# convert ID and Group to factor values
+rats$ID <- factor(rats$ID)
+rats$Group <- factor(rats$Group)
+```
+
+Check that data looks like it is supposed to.
+
+```{r}
+glimpse(rats)
+```
+
+And as stated in wrangling part: rats are divited into 3 died groubs - and there are different amount of rats in those gropbs.
+
+```{r}
+rats %>% 
+  filter(Time == 1) %>%
+  group_by(Group) %>%
+  summarise(n = n())
+```
+
+Plot weight values for all 16 rats, differentiating between three diet groubs.
+- Because there are 12 different linetypes and 16 rats, we have to recycle linetypes
+
+And what we see is:
+- rising trend in each group
+- there seems to be outlier in gropu 2
+- tracking phenomeon that is order or mouse weights tends to stay same througout time
+
+```{r}
+rats %>%
+  ggplot(., aes(x = Time)) +
+  geom_line(aes(y = Weight, linetype = ID)) +
+  scale_linetype_manual(values = c(1:8, 1:4, 1:4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none")
+```
+
+Same plot with standardized values:
+
+- i scale each gropu separatey 
+- i not sure if tracking is more visible in this version
+- lines are more horizontal, easier to observe
+
+```{r}
+rats %>%
+  group_by(Time, Group) %>%
+  mutate(stdTime = scale(Weight)) %>%
+  ggplot(., aes(x = Time)) +
+  geom_line(aes(y = stdTime, linetype = ID)) +
+  scale_linetype_manual(values = c(1:8, 1:4, 1:4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none")
+```
+
+Summaries of groups:
+
+- if we shift gropus 2 and 3 it is easier to see, that third groups values are within standard deviation on second group
+- group 2 has large standard deviation when compared to two other groups
+
+```{r}
+rats %>%
+  group_by(Time, Group) %>%
+  summarise(mean = mean(Weight), se = sd(Weight)) %>%
+  mutate(tt = ifelse(Group == 2, Time - 0.5, ifelse(Group == 3, Time + 0.5, Time))) %>%
+  # mutate(tt = ifelse(Group == 2, Time - 0.5, Time)) %>%
+  ggplot(., aes(x = tt, linetype = Group, color = Group)) +
+  geom_line(aes(y = mean)) +
+  scale_linetype_manual(values = c(1,2,3)) +
+  geom_point(aes(y = mean), size=3) +
+  scale_shape_manual(values = c(1,2,3)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se, linetype="1"), width=0.3) +
+  theme(legend.position = c(0.9,0.35)) +
+  scale_y_continuous(name = "mean(bprs) +/- se(bprs)")
+```
+
+If we plot boxplot, we see that:
+- group 1 and 2 have one outlier
+- gourp 3 might have one outlier
+
+```{r}
+rats %>%
+  ggplot(., aes(x = factor(Time))) +
+  geom_boxplot(aes(y = Weight, fill=Group)) 
+```
+
+Different kind of boxplot
+
+- outlier don't show
+
+```{r}
+rats %>%
+  group_by(Time, Group) %>%
+  summarise(mean = mean(Weight), se = sd(Weight)) %>%
+  ggplot(., aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "red")
+
+```
+
+## Linear Mixed Effects Models for Normal Response Variables
+
+In the book (and in DataCamp) different models were presented by using Rats dataset. In this part i'll try to reproduce examples, but with <a href="https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/BPRS.txt">BPRS -data</a>. 
+Dataset consist BPRS measurements of 40 patients.
+
+- trial took 9 weeks 
+- measurements were done once week
+- patients are divited to 2 groups.
+
+I have converted original data to "long form" in the data wrangling exercise, so it is ready to use for the purposes of this exercise.
+
+Read the data:
+
+```{r}
+rm(list=ls())
+
+linkToData <- "data/bprs.csv"
+bprs <- read.csv(linkToData, stringsAsFactors = T)
+
+# convert treatment and subject to factor values
+bprs$treatment <- factor(bprs$treatment)
+bprs$subject <- factor(bprs$subject)
+```
+
+### Multiple linear regression
+
+To begin, we will plot the data, indentifying the observations in both group but ignoring the longitudinal nature of the data. Book separated different groups using numbers, but I'll confine to with colors and shapes.
+
+By looking at the plot, it seems that:
+
+- there might be small downward trend
+- there might be one or two outliers in group treatment 2
+- difficult to say wether members of other groups would be doing better than other groups 
+
+```{r}
+ggplot(bprs, aes(x = week, y = bprs)) +
+  geom_point(aes(shape = treatment, color = treatment))
+```
+
+Then i'll setup a multiple linear regression model:
+
+- identifying that the are two treatment groups
+- ignoring the longitudinal nature of the measurements
+- explicitly dummy-encoding treatment group variable
+
+In summary:
+
+- residulals don't look promising; median value should be near zero and distributed evenly
+- now the positive spread is much wider
+- large p-Value of T1 tells that model doesn't consider dirrerence between the treatment groups important
+- week is considered important
+
+```{r}
+lmFit <- bprs %>%
+  mutate(T1 = ifelse(treatment==1,1,0)) %>%
+  lm(bprs ~ week + T1, data = .)
+
+summary(lmFit)
+```
+
+### Linear mixed models
+
+We begin with graphical display of the data that takes into account the longidudinal structure of data by joining together the points belongn to each patient.
+
+```{r}
+bprs %>%
+  mutate(uID = paste(treatment,subject, sep="_")) %>%
+  ggplot(., aes(x = week, y = bprs, group = uID)) +
+  geom_line(aes(linetype = treatment))
+
+```
+
+If we try to reproduce something exatly like figure 9.2 with BPRS data graph isn't particular informative. So i think that plotting disctinct graphs for both treatment gropus works better.
+
+- noqw we can see downward in treatment group 1 
+- treatment group 2 is bit turbulent
+
+```{r}
+ggplot(bprs, aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  scale_linetype_manual(values = c(1:10, 1:10)) +
+  theme(legend.position = "none") + 
+  facet_grid(. ~ treatment, labeller = label_both)
+```
+
+### Random intercept model
+
+This model allows the linear regression fit for each patient to differ in intercept from other patiens.
+
+
+- T1: 1.3034 -> 1.0761 Ei menny niinkuin piti...
+
+```{r}
+rimFit <- bprs %>% 
+  mutate(T1 = ifelse(treatment==1,1,0)) %>%
+  lmer(bprs ~ week + T1 + (1 | subject), 
+       data = .,
+       REML = FALSE)
+```
+
+Then i'll try to get something out of summary:
+
+- residuals seem to behave better than in first model
+- Std. Error of week has improved. In "standard linear model" it was 0.2524 and now it is 0.2084. This is because model now takes account of within-subject depencies of the bprs measurements
+-variance in subject is smaller than variance in residuals. I would interpret that subject vise information is less than noise
+
+The book example demonstrated between-subject effect in __group Std. Errors__ between Multiple Linear Regression model and Random intercept models when using Rats-data, but i don't notice similar effect when using BPRS - data.
+
+```{r}
+summary(rimFit)
+```
+
+Let's plot a graph that shows side by side of both treatment groups measured vs. fitted values.
+
+Hmmm... i might have error in somewhere because fitted values of treatment groups 1 and 2 look identical - or maby it's because model haven't got enought information, T1 value of summary might indicate this.
+
+```{r}
+# Create a vector of the fitted values
+Fitted <- fitted(rimFit)
+
+bprs$Fitted <- Fitted
+
+yMax = max(max(bprs$bprs),max(bprs$Fitted))
+yMin = min(min(bprs$bprs),min(bprs$Fitted))
+
+p1 <- bprs %>%
+  filter(treatment == 1) %>%
+  ggplot(., aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 1: measured values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p2 <- bprs %>%
+  filter(treatment == 1) %>%
+  ggplot(., aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 1: fitted values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p3 <- bprs %>%
+  filter(treatment == 2) %>%
+  ggplot(., aes(x = week, y = bprs, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 2: measured values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+p4 <- bprs %>%
+  filter(treatment == 2) %>%
+  ggplot(., aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line(aes(color=subject)) +
+  ggtitle("Treatment 2: fitted values") + 
+  scale_y_continuous(limits = c(yMin, yMax)) +
+  theme(legend.position = "none")
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+
+```
+
+
+### The random intercept and random slope model
+
+- allows the linear regression fits for each patient to differ in slope
+- allows the linear regression fits for each patient to differ in intercept
+
+```{r}
+riNrsFit <-  bprs %>%
+    mutate(T1 = ifelse(treatment==1,1,0)) %>%
+    lmer(bprs ~ week + T1 + (week | subject), 
+         data = .,
+         REML = FALSE)
+```
+
+- fixed effects are more or less the same than in previous model
+- in random effects subjects variance has increased; in this model there is more variance in subject values
+
+```{r}
+summary(riNrsFit)
+```
+
+
+
+
+### Random Intercept and Random Slope Model with interaction
+
+```{r}
+summary(
+  bprs %>%
+    mutate(T1 = ifelse(treatment==1,1,0)) %>%
+    lmer(bprs ~ week + T1 + (week | subject) + (week * treatment), 
+         data = .,
+         REML = FALSE)
+)
+
+
+```
+
