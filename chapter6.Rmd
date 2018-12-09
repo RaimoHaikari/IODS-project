@@ -28,7 +28,8 @@ Read the data:
 ```{r}
 rm(list=ls())
 
-linkToData <- "data/rats.csv"
+# linkToData <- "data/rats.csv"
+linkToData <- "https://raw.githubusercontent.com/RaimoHaikari/IODS-project/master/data/rats.csv"
 rats <- read.csv(linkToData, stringsAsFactors = T)
 
 # convert ID and Group to factor values
@@ -52,11 +53,13 @@ rats %>%
 ```
 
 Plot weight values for all 16 rats, differentiating between three diet groubs.
+
 - Because there are 12 different linetypes and 16 rats, we have to recycle linetypes
 
 And what we see is:
+
 - rising trend in each group
-- there seems to be outlier in gropu 2
+- there seems to be outlier in group 2
 - tracking phenomeon that is order or mouse weights tends to stay same througout time
 
 ```{r}
@@ -70,7 +73,7 @@ rats %>%
 
 Same plot with standardized values:
 
-- i scale each gropu separatey 
+- i scale each group separately 
 - i not sure if tracking is more visible in this version
 - lines are more horizontal, easier to observe
 
@@ -87,7 +90,7 @@ rats %>%
 
 Summaries of groups:
 
-- if we shift gropus 2 and 3 it is easier to see, that third groups values are within standard deviation on second group
+- if we shift groups 2 and 3 "a bit" it is easier to see, that third groups values are within standard deviation on second group
 - group 2 has large standard deviation when compared to two other groups
 
 ```{r}
@@ -107,8 +110,9 @@ rats %>%
 ```
 
 If we plot boxplot, we see that:
+
 - group 1 and 2 have one outlier
-- gourp 3 might have one outlier
+- group 3 might have one outlier
 
 ```{r}
 rats %>%
@@ -130,6 +134,45 @@ rats %>%
 
 ```
 
+We can't do t-test, because there are three groups.
+
+But we can make similar comparison like was done in DataCamp where linear model was build for BPRS data, with exception that now weight is modeled by baseline and groub information.
+
+In order to set baseline of weight, i'll first have to extract start weights to temporary table and the by using left join feed values back to "long version" of rats data. 
+
+```{r}
+
+A <- rats %>%
+  filter(Time == 1)
+
+B <- left_join(rats, A, by = c("ID","Group"))
+
+B$Time.y <- NULL
+B$WD.y <- NULL
+
+colnames(B) <- c("ID","Group","WD","Weight","Time","Baseline")
+
+fit <- lm(Weight ~ Baseline + Group, data = B)
+```
+
+Summary of the linear model tells:
+
+- Baseline is more important factor in explaining rat weight than diet group
+- but witch diet group rat belongs also matters
+
+```{r}
+summary(fit)
+```
+
+And analysis of variance table confirms what was previously stated.
+
+To be honest i don't understand a heck of what variance table means, but i willing to make a bet that at least two of reviewrs doesn't know more than i do:-)
+
+```{r}
+anova(fit)
+```
+
+
 ## Linear Mixed Effects Models for Normal Response Variables
 
 In the book (and in DataCamp) different models were presented by using Rats dataset. In this part i'll try to reproduce examples, but with <a href="https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/BPRS.txt">BPRS -data</a>. 
@@ -146,7 +189,8 @@ Read the data:
 ```{r}
 rm(list=ls())
 
-linkToData <- "data/bprs.csv"
+# linkToData <- "data/bprs.csv"
+linkToData <- "https://raw.githubusercontent.com/RaimoHaikari/IODS-project/master/data/bprs.csv"
 bprs <- read.csv(linkToData, stringsAsFactors = T)
 
 # convert treatment and subject to factor values
@@ -366,7 +410,6 @@ p4 <- bprs %>%
 grid.arrange(p1, p2, p3, p4, nrow = 2)
 
 ```
-
 
 ### Random Intercept and Random Slope Model with interaction
 
